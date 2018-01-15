@@ -1,0 +1,16 @@
+apiVersion: v1
+items:
+- apiVersion: v1
+  data:
+    application.properties: greeter.message=%s %s! Spring Boot application.properties
+      has been mounted as volume on OpenShift on a new project!
+  kind: ConfigMap
+  metadata:
+    name: spring-app-config
+- apiVersion: v1
+  data:
+    greeter.prefix: Bonjour
+  kind: ConfigMap
+  metadata:
+    name: spring-boot-configmaps-demo
+kind: List

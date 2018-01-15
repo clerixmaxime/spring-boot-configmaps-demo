@@ -1,0 +1,160 @@
+apiVersion: v1
+kind: Template
+metadata:
+  creationTimestamp: null
+  name: spring-configmap
+parameters:
+  - name: SOURCE_REPOSITORY_URL 
+    displayName: Source Repository URL 
+    description: The URL of the repository with your application source code 
+    value: https://github.com/clerixmaxime/spring-boot-configmaps-demo
+    required: true
+objects:
+- apiVersion: v1
+  kind: BuildConfig
+  metadata:
+    labels:
+      app: spring-configmap
+    name: spring-configmap
+  spec:
+    failedBuildsHistoryLimit: 5
+    output:
+      to:
+        kind: ImageStreamTag
+        name: spring-configmap:latest
+    postCommit: {}
+    resources: {}
+    runPolicy: Serial
+    source:
+      git:
+        uri: ${SOURCE_REPOSITORY_URL}
+      type: Git
+    strategy:
+      sourceStrategy:
+        from:
+          kind: ImageStreamTag
+          name: redhat-openjdk18-openshift:latest
+          namespace: openshift
+      type: Source
+    successfulBuildsHistoryLimit: 5
+    triggers:
+    - type: ConfigChange
+    - imageChange: {}
+      type: ImageChange
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    labels:
+      app: spring-configmap
+    name: spring-configmap
+  spec:
+    replicas: 1
+    selector:
+      app: spring-configmap
+      deploymentconfig: spring-configmap
+    strategy:
+      activeDeadlineSeconds: 21600
+      resources: {}
+      rollingParams:
+        intervalSeconds: 1
+        maxSurge: 25%
+        maxUnavailable: 25%
+        timeoutSeconds: 600
+        updatePeriodSeconds: 1
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          app: spring-configmap
+          deploymentconfig: spring-configmap
+      spec:
+        containers:
+        - env:
+          - name: GREETING_PREFIX
+            valueFrom:
+              configMapKeyRef:
+                key: greeter.prefix
+                name: spring-boot-configmaps-demo
+          image: ""
+          imagePullPolicy: Always
+          name: spring-configmap
+          ports:
+          - containerPort: 8080
+            protocol: TCP
+          - containerPort: 8443
+            protocol: TCP
+          - containerPort: 8778
+            protocol: TCP
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+          volumeMounts:
+          - mountPath: /deployments/config
+            name: spring-app-config-volume
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+        volumes:
+        - configMap:
+            defaultMode: 420
+            items:
+            - key: application.properties
+              path: application.properties
+            name: spring-app-config
+          name: spring-app-config-volume
+    test: false
+    triggers:
+    - type: ConfigChange
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - spring-configmap
+        from:
+          kind: ImageStreamTag
+          name: spring-configmap:latest
+      type: ImageChange
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    labels:
+      app: spring-configmap
+    name: spring-configmap
+- apiVersion: v1
+  kind: Route
+  metadata:
+    name: spring-configmap
+  spec:
+    port:
+      targetPort: 8080-tcp
+    to:
+      kind: Service
+      name: spring-configmap
+      weight: 100
+    wildcardPolicy: None
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: spring-configmap
+    name: spring-configmap
+  spec:
+    ports:
+    - name: 8080-tcp
+      port: 8080
+      protocol: TCP
+      targetPort: 8080
+    - name: 8443-tcp
+      port: 8443
+      protocol: TCP
+      targetPort: 8443
+    - name: 8778-tcp
+      port: 8778
+      protocol: TCP
+      targetPort: 8778
+    selector:
+      app: spring-configmap
+      deploymentconfig: spring-configmap
+    sessionAffinity: None
+    type: ClusterIP
